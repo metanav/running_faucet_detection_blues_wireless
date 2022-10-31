@@ -1,1 +1,1 @@
-# running_faucet_detection_blues_wireless
+# Running faucet detection with Blues Wireless
