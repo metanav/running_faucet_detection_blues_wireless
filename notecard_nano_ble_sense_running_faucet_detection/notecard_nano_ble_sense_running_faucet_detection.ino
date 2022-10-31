@@ -10,8 +10,8 @@
 #define MY_PRODUCT_ID       "com.xxxxx.xxxxxx:running_faucet_detector"
 #define FROM_PHONE_NUMBER   "+16467xxxxxx" // Twilio provided
 #define TO_PHONE_NUMBER     "+81809xxxxxx" 
-#define ALERT_THRESOLD_SECS  (30)
-#define LOG_THRESOLD_SECS    (60)
+#define CONTINUOUS_THRESOLD_SECS  (10)
+#define NOTE_THRESOLD_SECS   (30)
 #define LED_RED 22
 #define LED_BLUE 24
 #define FAUCET_IDX 0
@@ -21,7 +21,6 @@
 Notecard notecard;
 
 static rtos::Thread inference_thread(osPriorityLow);
-
 
 /** Audio buffers, pointers and selectors */
 typedef struct {
@@ -124,33 +123,6 @@ void send_alert_message()
   notecard_success();
 }
 
-void send_log_message(uint32_t start_time, uint32_t end_time)
-{
-  // Add a note
-  J *req = notecard.newRequest("note.add");
-  if (req != NULL) {
-    // send immediately
-    JAddBoolToObject(req, "sync", true);
-    JAddStringToObject(req, "file", "datacake.qo");
-    J *body = JCreateObject();
-    if (body != NULL) {
-      JAddStringToObject(body, "event", "Running Faucet Log");
-      JAddNumberToObject(body, "start_time", start_time);
-      JAddNumberToObject(body, "end_time", end_time);
-      JAddItemToObject(req, "body", body);
-    }
-
-    if (!notecard.sendRequest(req)) {
-      notecard.logDebug("ERROR: add note request\n");
-      notecard_error();
-    } else {
-      ei_printf("Note sent!\n");
-    }
-  }
-  notecard_success();
-}
-
-
 void setup()
 {
   serialDebugOut.begin(115200);
@@ -223,14 +195,11 @@ void run_inference_background()
       if (result.classification[FAUCET_IDX].value > 0.8f) {
         uint32_t current_time = get_current_timestamp_from_notecard();
         if (prev_prediction == FAUCET_IDX) {
-          if ((current_time - continous_faucet_running_start_time) > ALERT_THRESOLD_SECS) {
+          if ((current_time - continous_faucet_running_start_time) > CONTINUOUS_THRESOLD_SECS) {
             ei_printf("Faucet running time: %ld\n", (current_time - continous_faucet_running_start_time));
-            if (current_time - last_notification_sent_time > LOG_THRESOLD_SECS) {
+            if (current_time - last_notification_sent_time > NOTE_THRESOLD_SECS) {
               send_alert_message();
               last_notification_sent_time = current_time;
-            }
-            if ((current_time - continous_faucet_running_start_time) % LOG_THRESOLD_SECS == 0) {
-              send_log_message(continous_faucet_running_start_time, current_time);
             }
           }
         } else {
